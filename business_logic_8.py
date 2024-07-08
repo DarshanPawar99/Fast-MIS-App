@@ -1,6 +1,8 @@
 import pandas as pd
+import dask.dataframe as dd
 import streamlit as st
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -220,9 +222,8 @@ def display_dataframes(combined_df, mismatched_data, karbon_expenses_data, aggre
     aggregated_df = pd.DataFrame(list(aggregated_data.items()), columns=['Parameter', 'Value'])
     st.subheader("Aggregated Values")
     st.table(format_dataframe(aggregated_df))
-    
 
-def business_logic_8(df):
+def process_dataframe(df):
     combined_df = pivot_and_average_prices(df)
     mismatched_data = find_mismatches(df)
     aggregated_data = calculate_aggregated_values(df)
@@ -230,4 +231,12 @@ def business_logic_8(df):
     selling_value_issues = find_selling_value_issues(df)
     popup_selling_issues = find_popup_selling_issues(df)
     karbon_expenses_data = find_karbon_expenses(df)
+    return combined_df, mismatched_data, karbon_expenses_data, aggregated_data, buying_value_issues, selling_value_issues, popup_selling_issues
+
+def business_logic_8(file_path):
+    df = dd.read_csv(file_path).compute()  # Load large data using Dask and convert to Pandas DataFrame
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        combined_df, mismatched_data, karbon_expenses_data, aggregated_data, buying_value_issues, selling_value_issues, popup_selling_issues = executor.submit(process_dataframe, df).result()
+
     display_dataframes(combined_df, mismatched_data, karbon_expenses_data, aggregated_data, buying_value_issues, selling_value_issues, popup_selling_issues)
