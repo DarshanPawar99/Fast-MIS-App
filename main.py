@@ -93,7 +93,7 @@ def main():
             "business_logic_5": ["Gojek","Microchip Main Meal"],
             "business_logic_6": ["HD Works"],
             "business_logic_7": ["MPL"],
-            "business_logic_8": ["Tonbo","Tadano Escorts","Siemens - Tuckshop","Dynasty","Citrix Driver's Lunch & Dinner","sharefile"],
+            "business_logic_8": ["Tonbo","Tadano Escorts","Siemens - Tuckshop","Dynasty","Citrix Driver's Lunch & Dinner","sharefile","NewDynasty"],
             "business_logic_9": ["Rippling","Tessolve"],
             "business_logic_10": ["MPL -  Infinity Plates","Tekion.","Groww Koramangala","Groww VTP","MIQ","Groww Mumbai","Ather Mumbai","Epam"],
             "business_logic_11": ["Telstra MainMeal(Cash & Carry)"],
