@@ -1,8 +1,6 @@
 import pandas as pd
-import dask.dataframe as dd
 import streamlit as st
 import logging
-from concurrent.futures import ThreadPoolExecutor
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -22,7 +20,7 @@ def check_mismatch(row, index, column_name, expected_value, mismatched_data):
         })
 
 def pivot_and_average_prices(df):
-    pivot_df = df.pivot_table(index=['site name', 'vendor', 'session', 'meal type', 'order type'], aggfunc='size').reset_index(name='days')
+    pivot_df = df.groupby(['site name', 'vendor', 'session', 'meal type', 'order type']).size().reset_index(name='days')
     avg_prices = df.groupby(['site name', 'vendor', 'session', 'meal type', 'order type']).agg(
         average_buying_price_ai=('buying price ai', 'mean'),
         average_selling_price=('selling price', 'mean')
@@ -37,17 +35,17 @@ def find_mismatches(df):
             calculated_buying_price = safe_get_value(row, 'buying price ai') / safe_get_value(row, 'gst')
             check_mismatch(row, index, 'buying price', calculated_buying_price, mismatched_data)
 
-            calculated_buying_amt = (safe_get_value(row, 'buying price ai') * safe_get_value(row, 'buying pax') 
+            calculated_buying_amt = (safe_get_value(row, 'buying price ai') * safe_get_value(row, 'buying pax')
                                      + safe_get_value(row, 'buying transportation'))
             check_mismatch(row, index, 'buying amt ai', calculated_buying_amt, mismatched_data)
 
             calculated_selling_pax = safe_get_value(row, 'buying pax')
             check_mismatch(row, index, 'selling pax', calculated_selling_pax, mismatched_data)
-            
+
             calculated_selling_amount = (safe_get_value(row, 'selling pax') * safe_get_value(row, 'selling price')) + safe_get_value(row, 'selling transportation')
             check_mismatch(row, index, 'selling amount', calculated_selling_amount, mismatched_data)
-            
-            calculated_commission = (safe_get_value(row, 'selling amount') - safe_get_value(row, 'buying amt ai') 
+
+            calculated_commission = (safe_get_value(row, 'selling amount') - safe_get_value(row, 'buying amt ai')
                                      + safe_get_value(row, 'penalty on vendor') - safe_get_value(row, 'penalty on smartq'))
             check_mismatch(row, index, 'commission', calculated_commission, mismatched_data)
         except Exception as e:
@@ -57,7 +55,7 @@ def find_mismatches(df):
 
 def find_karbon_expenses(df):
     karbon_expenses_data = []
-    columns_to_check = ['date(karbon)','expense item', 'reason for expense', 'expense type', 'price', 'pax', 'amount', 'mode of payment','bill to','requested by','approved by']
+    columns_to_check = ['date(karbon)', 'expense item', 'reason for expense', 'expense type', 'price', 'pax', 'amount', 'mode of payment', 'bill to', 'requested by', 'approved by']
     for index, row in df.iterrows():
         if any(pd.notna(row[col]) and row[col] != 0 for col in columns_to_check):
             karbon_expenses_data.append({
@@ -79,16 +77,16 @@ def find_karbon_expenses(df):
     return karbon_expenses_data
 
 def calculate_aggregated_values(df):
-    regular_orders = df[df['order type'] .isin(['regular','regular-pop-up', 'food trial'])]
+    regular_orders = df[df['order type'].isin(['regular', 'regular-pop-up', 'food trial'])]
     sum_buying_pax_regular = regular_orders['buying pax'].sum()
     sum_selling_pax_regular = regular_orders['selling pax'].sum()
 
-    regular_and_adhoc_orders = df[df['order type'].isin(['regular', 'smartq-pop-up', 'food trial', 'regular-pop-up','tuckshop'])]
-    sum_buying_amt_ai_regular= regular_and_adhoc_orders['buying amt ai'].sum()
+    regular_and_adhoc_orders = df[df['order type'].isin(['regular', 'smartq-pop-up', 'food trial', 'regular-pop-up', 'tuckshop'])]
+    sum_buying_amt_ai_regular = regular_and_adhoc_orders['buying amt ai'].sum()
     sum_selling_amt_regular = regular_and_adhoc_orders['selling amount'].sum()
 
     event_and_popup_orders = df[df['order type'].isin(['event', 'event pop-up', 'adhoc'])]
-    sum_buying_amt_ai_event= event_and_popup_orders['buying amt ai'].sum()
+    sum_buying_amt_ai_event = event_and_popup_orders['buying amt ai'].sum()
     sum_selling_amt_event = event_and_popup_orders['selling amount'].sum()
 
     sum_penalty_on_vendor = df['penalty on vendor'].sum()
@@ -116,50 +114,18 @@ def calculate_aggregated_values(df):
     return aggregated_data
 
 def find_buying_value_issues(df):
-    buying_value_issues = []
-    for index, row in df.iterrows():
-        if (safe_get_value(row, 'buying pax') > 0 or safe_get_value(row, 'buying price ai') > 0) and safe_get_value(row, 'buying amt ai') == 0:
-            buying_value_issues.append({
-                'Row': index + 3,
-                'Date': row['date'],
-                'Session': row['session'],
-                'Mealtype': row['meal type'],
-                'Ordertype': row['order type'],
-                'Buying Pax': row['buying pax'],
-                'Buying Price AI': row['buying price ai'],
-                'Buying Amount AI': row['buying amt ai']
-            })
+    buying_value_issues = df[(df['buying pax'] > 0) | (df['buying price ai'] > 0) & (df['buying amt ai'] == 0)].copy()
+    buying_value_issues['Row'] = buying_value_issues.index + 3
     return buying_value_issues
 
 def find_selling_value_issues(df):
-    selling_value_issues = []
-    for index, row in df.iterrows():
-        if (safe_get_value(row, 'selling pax') > 0 or safe_get_value(row, 'selling price') > 0) and safe_get_value(row, 'selling amount') == 0:
-            selling_value_issues.append({
-                'Row': index + 3,
-                'Date': row['date'],
-                'Session': row['session'],
-                'Mealtype': row['meal type'],
-                'Ordertype': row['order type'],
-                'Selling Pax': row['selling pax'],
-                'Selling Price': row['selling price'],
-                'Selling Amount': row['selling amount']
-            })
+    selling_value_issues = df[(df['selling pax'] > 0) | (df['selling price'] > 0) & (df['selling amount'] == 0)].copy()
+    selling_value_issues['Row'] = selling_value_issues.index + 3
     return selling_value_issues
 
 def find_popup_selling_issues(df):
-    popup_selling_issues = []
-    for index, row in df.iterrows():
-        if row['order type'] in ['smartq-pop-up', 'regular-pop-up', 'event pop-up'] and safe_get_value(row, 'selling amount') > 0:
-            popup_selling_issues.append({
-                'Row': index + 3,
-                'Date': row['date'],
-                'Session': row['session'],
-                'Order Type': row['order type'],
-                'Selling Pax': row['selling pax'],
-                'Selling Price': row['selling price'],
-                'Selling Amount': row['selling amount']
-            })
+    popup_selling_issues = df[df['order type'].isin(['smartq-pop-up', 'regular-pop-up', 'event pop-up']) & (df['selling amount'] > 0)].copy()
+    popup_selling_issues['Row'] = popup_selling_issues.index + 3
     return popup_selling_issues
 
 def format_dataframe(df):
@@ -183,28 +149,25 @@ def display_dataframes(combined_df, mismatched_data, karbon_expenses_data, aggre
         st.write("<span style='color:green'>No mismatch found.</span> :white_check_mark:", unsafe_allow_html=True)
         st.markdown("---")
 
-    if buying_value_issues:
-        buying_value_issues_df = pd.DataFrame(buying_value_issues)
+    if not buying_value_issues.empty:
         st.write("<span style='color:red'>Buying Value Issues</span> :heavy_exclamation_mark:", unsafe_allow_html=True)
-        st.dataframe(format_dataframe(buying_value_issues_df))
+        st.dataframe(format_dataframe(buying_value_issues))
         st.markdown("---")
     else:
         st.write("<span style='color:green'>No buying value issues found.</span> :white_check_mark:", unsafe_allow_html=True)
         st.markdown("---")
 
-    if selling_value_issues:
-        selling_value_issues_df = pd.DataFrame(selling_value_issues)
+    if not selling_value_issues.empty:
         st.write("<span style='color:red'>Selling Value Issues</span> :heavy_exclamation_mark:", unsafe_allow_html=True)
-        st.dataframe(format_dataframe(selling_value_issues_df))
+        st.dataframe(format_dataframe(selling_value_issues))
         st.markdown("---")
     else:
         st.write("<span style='color:green'>No selling value issues found.</span> :white_check_mark:", unsafe_allow_html=True)
         st.markdown("---")
 
-    if popup_selling_issues:
-        popup_selling_issues_df = pd.DataFrame(popup_selling_issues)
+    if not popup_selling_issues.empty:
         st.write("<span style='color:red'>Popup Selling Issues.</span> :heavy_exclamation_mark:", unsafe_allow_html=True)
-        st.dataframe(format_dataframe(popup_selling_issues_df))
+        st.dataframe(format_dataframe(popup_selling_issues))
         st.markdown("---")
     else:
         st.write("<span style='color:green'>No selling price found in Pop-up.</span> :white_check_mark:", unsafe_allow_html=True)
@@ -223,7 +186,7 @@ def display_dataframes(combined_df, mismatched_data, karbon_expenses_data, aggre
     st.subheader("Aggregated Values")
     st.table(format_dataframe(aggregated_df))
 
-def process_dataframe(df):
+def business_logic(df):
     combined_df = pivot_and_average_prices(df)
     mismatched_data = find_mismatches(df)
     aggregated_data = calculate_aggregated_values(df)
@@ -231,12 +194,5 @@ def process_dataframe(df):
     selling_value_issues = find_selling_value_issues(df)
     popup_selling_issues = find_popup_selling_issues(df)
     karbon_expenses_data = find_karbon_expenses(df)
-    return combined_df, mismatched_data, karbon_expenses_data, aggregated_data, buying_value_issues, selling_value_issues, popup_selling_issues
-
-def business_logic_8(file_path):
-    df = dd.read_csv(file_path).compute()  # Load large data using Dask and convert to Pandas DataFrame
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        combined_df, mismatched_data, karbon_expenses_data, aggregated_data, buying_value_issues, selling_value_issues, popup_selling_issues = executor.submit(process_dataframe, df).result()
-
     display_dataframes(combined_df, mismatched_data, karbon_expenses_data, aggregated_data, buying_value_issues, selling_value_issues, popup_selling_issues)
+
