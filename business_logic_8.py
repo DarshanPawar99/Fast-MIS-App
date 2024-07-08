@@ -186,7 +186,7 @@ def display_dataframes(combined_df, mismatched_data, karbon_expenses_data, aggre
     st.subheader("Aggregated Values")
     st.table(format_dataframe(aggregated_df))
 
-def business_logic(df):
+def business_logic_8(df):
     combined_df = pivot_and_average_prices(df)
     mismatched_data = find_mismatches(df)
     aggregated_data = calculate_aggregated_values(df)
