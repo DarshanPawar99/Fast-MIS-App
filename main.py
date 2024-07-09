@@ -22,7 +22,7 @@ def read_excel_file(uploaded_file):
 def load_sheet_data(excel_file, selected_sheet):
     try:
         # Read the selected sheet into a Dask dataframe
-        df = dd.read_excel(excel_file, sheet_name=selected_sheet, header=1, engine='openpyxl')
+        df = dd.read_excel(excel_file, sheet_name=selected_sheet, header=2, engine='openpyxl')
         logging.info(f"Sheet '{selected_sheet}' loaded successfully.")
         return df
     except Exception as e:
