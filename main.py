@@ -19,20 +19,19 @@ def main():
     # Cache the uploaded file to avoid re-uploading
     @st.cache_data
     def load_excel(file):
-        return pd.ExcelFile(file)
+        return pd.read_excel(file, None)
 
     try:
-        excel_file = load_excel(uploaded_file)
+        excel_sheets = load_excel(uploaded_file)
     except Exception as e:
         st.error(f"Error reading the Excel file: {e}")
         return
 
-    sheet_names = excel_file.sheet_names
+    sheet_names = list(excel_sheets.keys())
     selected_sheet = st.sidebar.selectbox('Select a sheet to display', sheet_names)
 
     @st.cache_data
-    def load_sheet(file, sheet_name):
-        df = pd.read_excel(file, sheet_name=sheet_name, header=1)
+    def process_sheet(df):
         df.columns = df.columns.str.lower().str.strip()
         columns_to_convert = df.columns.difference(['date'])
         df[columns_to_convert] = df[columns_to_convert].apply(
@@ -40,22 +39,10 @@ def main():
         )
         return df
 
-    # Use ThreadPoolExecutor to load multiple sheets concurrently
-    def load_all_sheets(file, sheet_names):
-        with ThreadPoolExecutor() as executor:
-            dfs = list(executor.map(lambda sheet_name: load_sheet(file, sheet_name), sheet_names))
-        return dict(zip(sheet_names, dfs))
-
     try:
-        excel_sheets = load_all_sheets(uploaded_file, sheet_names)
+        df = process_sheet(excel_sheets[selected_sheet])
     except Exception as e:
         st.error(f"Error processing the data: {e}")
-        return
-
-    try:
-        df = excel_sheets[selected_sheet]
-    except Exception as e:
-        st.error(f"Error loading the selected sheet: {e}")
         return
 
     if 'month' not in df.columns:
