@@ -86,35 +86,43 @@ def main():
     
     uploaded_file = st.sidebar.file_uploader('Upload Excel file', type=['xlsx', 'xls'])
     if uploaded_file:
-        with ThreadPoolExecutor() as executor:
-            future_excel_file = executor.submit(read_excel_file, uploaded_file)
-            excel_file = future_excel_file.result()
-
-            if excel_file:
-                sheet_names = excel_file.sheet_names
-                selected_sheet = st.sidebar.selectbox('Select a sheet to display', sheet_names)
+        st.write("File Uploaded Successfully.")  # Debug print
+        try:
+            with ThreadPoolExecutor() as executor:
+                future_excel_file = executor.submit(read_excel_file, uploaded_file)
+                excel_file = future_excel_file.result()
                 
-                future_df = executor.submit(load_sheet_data, excel_file, selected_sheet)
-                df = future_df.result()
-                
-                if df is not None:
-                    df = process_data(df)
+                if excel_file:
+                    st.write("Excel file loaded.")  # Debug print
+                    sheet_names = excel_file.sheet_names
+                    selected_sheet = st.sidebar.selectbox('Select a sheet to display', sheet_names)
                     
-                    if df is not None and 'month' in df.columns:
-                        month = st.sidebar.selectbox("Select the month for review", df['month'].unique())
+                    future_df = executor.submit(load_sheet_data, excel_file, selected_sheet)
+                    df = future_df.result()
+
+                    if df is not None:
+                        st.write("Dataframe loaded.", df.head())  # Debug print
+                        df = process_data(df)
                         
-                        future_df_filtered = executor.submit(filter_by_month, df, month)
-                        df_filtered = future_df_filtered.result()
-                        
-                        if df_filtered is not None:
-                            apply_business_logic(df_filtered, selected_sheet)
+                        if df is not None and 'month' in df.columns:
+                            month = st.sidebar.selectbox("Select the month for review", df['month'].unique())
+                            
+                            future_df_filtered = executor.submit(filter_by_month, df, month)
+                            df_filtered = future_df_filtered.result()
+                            
+                            if df_filtered is not None:
+                                st.write("Filtered Data", df_filtered.head())  # Debug print
+                                apply_business_logic(df_filtered, selected_sheet)
+                            else:
+                                st.error("Error filtering data by month.")
                         else:
-                            st.error("Error filtering data by month.")
+                            st.write("No 'month' column found in this sheet.")
                     else:
-                        st.write("No 'month' column found in this sheet.")
-                        logging.warning("No 'month' column found in the sheet.")
-            else:
-                st.error("Error uploading the Excel file.")
+                        st.error("Failed to load data from sheet.")
+                else:
+                    st.error("Failed to read Excel file.")
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
     else:
         st.write("Please upload an Excel file to proceed.")
 
