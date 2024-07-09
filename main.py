@@ -21,7 +21,8 @@ def read_excel_file(uploaded_file):
 
 def load_sheet_data(excel_file, selected_sheet):
     try:
-        # Read the selected sheet into a pandas dataframe first
+        # Read the selected sheet into a pandas dataframe
+        # Since headers are on the second row (index 1), we set header=1
         df = pd.read_excel(excel_file, sheet_name=selected_sheet, header=1, engine='openpyxl')
         # Convert all column names to lower case and strip whitespaces
         df.columns = df.columns.str.lower().str.strip()
@@ -60,7 +61,7 @@ def filter_by_month(df, month):
 
 def apply_business_logic(df_filtered, selected_sheet):
     business_logic_sheets = {
-        # Define business logic sheets here
+        # Define business logic sheets here (for brevity not included in this message)
     }
 
     business_logic_module = None
