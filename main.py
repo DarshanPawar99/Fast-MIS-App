@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import importlib
+from concurrent.futures import ThreadPoolExecutor
 
 # Set up Streamlit page config
 st.set_page_config(page_title="Monthly MIS Checker", layout="wide")
@@ -39,10 +40,22 @@ def main():
         )
         return df
 
+    # Use ThreadPoolExecutor to load multiple sheets concurrently
+    def load_all_sheets(file, sheet_names):
+        with ThreadPoolExecutor() as executor:
+            dfs = list(executor.map(lambda sheet_name: load_sheet(file, sheet_name), sheet_names))
+        return dict(zip(sheet_names, dfs))
+
     try:
-        df = load_sheet(uploaded_file, selected_sheet)
+        excel_sheets = load_all_sheets(uploaded_file, sheet_names)
     except Exception as e:
         st.error(f"Error processing the data: {e}")
+        return
+
+    try:
+        df = excel_sheets[selected_sheet]
+    except Exception as e:
+        st.error(f"Error loading the selected sheet: {e}")
         return
 
     if 'month' not in df.columns:
