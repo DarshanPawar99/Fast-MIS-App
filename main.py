@@ -1,5 +1,5 @@
-import dask.dataframe as dd
 import pandas as pd
+import dask.dataframe as dd
 import logging
 import streamlit as st
 import importlib
@@ -21,12 +21,14 @@ def read_excel_file(uploaded_file):
 
 def load_sheet_data(excel_file, selected_sheet):
     try:
-        # Read the selected sheet into a Dask dataframe
-        df = dd.read_excel(excel_file, sheet_name=selected_sheet, header=1, engine='openpyxl')
+        # Read the selected sheet into a pandas dataframe first
+        df = pd.read_excel(excel_file, sheet_name=selected_sheet, header=1, engine='openpyxl')
         # Convert all column names to lower case and strip whitespaces
         df.columns = df.columns.str.lower().str.strip()
+        # Optionally convert pandas DataFrame to Dask DataFrame
+        ddf = dd.from_pandas(df, npartitions=3)
         logging.info(f"Sheet '{selected_sheet}' loaded successfully.")
-        return df
+        return ddf
     except Exception as e:
         logging.error(f"Error reading the sheet '{selected_sheet}': {e}")
         st.error(f"Error reading the sheet '{selected_sheet}': {e}")
@@ -58,7 +60,7 @@ def filter_by_month(df, month):
 
 def apply_business_logic(df_filtered, selected_sheet):
     business_logic_sheets = {
-        # Define business logic sheets here (for brevity not included in this message)
+        # Define business logic sheets here
     }
 
     business_logic_module = None
@@ -83,7 +85,7 @@ def apply_business_logic(df_filtered, selected_sheet):
 def main():
     st.set_page_config(page_title="Monthly MIS Checker", layout="wide")
     st.title("MIS Reviewer :chart_with_upwards_trend:")
-    
+
     uploaded_file = st.sidebar.file_uploader('Upload Excel file', type=['xlsx', 'xls'])
     if uploaded_file:
         st.write("File Uploaded Successfully.")  # Debug print
@@ -91,25 +93,25 @@ def main():
             with ThreadPoolExecutor() as executor:
                 future_excel_file = executor.submit(read_excel_file, uploaded_file)
                 excel_file = future_excel_file.result()
-                
+
                 if excel_file:
                     st.write("Excel file loaded.")  # Debug print
                     sheet_names = excel_file.sheet_names
                     selected_sheet = st.sidebar.selectbox('Select a sheet to display', sheet_names)
-                    
+
                     future_df = executor.submit(load_sheet_data, excel_file, selected_sheet)
                     df = future_df.result()
 
                     if df is not None:
                         st.write("Dataframe loaded.", df.head())  # Debug print
                         df = process_data(df)
-                        
+
                         if df is not None and 'month' in df.columns:
                             month = st.sidebar.selectbox("Select the month for review", df['month'].unique())
-                            
+
                             future_df_filtered = executor.submit(filter_by_month, df, month)
                             df_filtered = future_df_filtered.result()
-                            
+
                             if df_filtered is not None:
                                 st.write("Filtered Data", df_filtered.head())  # Debug print
                                 apply_business_logic(df_filtered, selected_sheet)
